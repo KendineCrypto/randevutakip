@@ -29,11 +29,26 @@ VITE_SUPABASE_ANON_KEY=publishable_veya_anon_anahtari
 
 7. Geliştirme sunucusunu yeniden başlatın. Oluşturduğunuz hesapla giriş yapın.
 
-Tüm yedi tabloda RLS açıktır. Her hesap yalnızca kendi `user_id` kayıtlarını okuyup değiştirebilir; ilişkilerdeki birleşik yabancı anahtarlar başka hesaptaki müşteriye, pakete veya cihaza kayıt bağlanmasını engeller. Bu ilk sürüm tek salon yöneticisine yöneliktir; farklı hesaplar aynı salonun verilerini paylaşmaz.
+Tüm uygulama tablolarında ve paket–cihaz ilişki tablosunda RLS açıktır. Her hesap yalnızca kendi `user_id` kayıtlarını okuyup değiştirebilir; ilişkilerdeki birleşik yabancı anahtarlar başka hesaptaki müşteriye, pakete veya cihaza kayıt bağlanmasını engeller. Bu ilk sürüm tek salon yöneticisine yöneliktir; farklı hesaplar aynı salonun verilerini paylaşmaz.
 
 ## Kullanım akışı
 
-### Mevcut kurulum için 20 Eylül güncellemesi
+### Bir pakette birden fazla cihaz
+
+**Mevcut Supabase projesinde sırayla çalıştırın:**
+
+1. Oda güncellemesi henüz uygulanmadıysa `supabase/migrations/20260920_shared_rooms.sql`.
+2. `supabase/migrations/20260920_package_devices.sql` dosyasının tamamı.
+
+Mevcut projede `schema.sql` dosyasını tekrar çalıştırmayın; yeni kurulum şeması iki güncellemeyi de içerir. Çoklu cihaz migrationı tekrar çalıştırılabilir ve mevcut tek cihaz bağlantılarını korur. Uygulamayı yayınlamadan önce SQL güncellemesini uygulayın.
+
+- **Paket oluştur / Düzenle → Paketteki cihazlar** bölümünden örneğin **Lenf drenaj + G5** seçin. Cihaz gerektirmeyen bir paket için seçim boş kalabilir.
+- **Toplam seans süresi**, paketin bir randevusunun tamamıdır. Seçili tüm cihazlar bu sürenin tamamında ayrılır; cihaz başına ayrı zaman dilimi veya seans sayısı tanımlanmaz. Paket 8 seanssa katılım 8 paket seansı üzerinden takip edilir.
+- Paket kartları, müşteri kartları, paket atama ve randevu formu tüm cihazları birlikte gösterir. Arşivlenen bir cihaz mevcut pakette korunur; yeni paket seçeneklerinde gösterilmez.
+- İki paketin tek bir cihazı bile ortaksa örtüşen randevu engellenir. Diyet/lazer ortak oda kontrolü ayrıca devam eder. Sonradan cihaz eklemek veya süreyi uzatmak mevcut gelecek randevularla çakışacaksa değişiklik reddedilir.
+- Cihaz listesi paketle birlikte tek işlemde kaydedilir. Veritabanındaki ilişki tablosu her cihazın aynı salona ait olmasını ve paketteki ikinci/üçüncü cihazın da kullanımdayken silinmemesini sağlar.
+
+### Mevcut kurulum için oda güncellemesi
 
 **Önce Supabase SQL Editor'da `supabase/migrations/20260920_shared_rooms.sql` dosyasının tamamını çalıştırın.** Mevcut projede `schema.sql` dosyasını tekrar çalıştırmayın. Güncelleme kayıtları silmez ve tekrar çalıştırılabilir. Ardından güncel uygulamayı yayınlayın / sayfayı yenileyin. Yeni projeler için `schema.sql` bu güncellemeyi zaten içerir.
 
@@ -74,7 +89,7 @@ npm run build
 npm test
 ```
 
-17 kontrol; ilk/son ölçüm sıralaması ve eksik değerleri, katılım sayacı, paket tarih sınırları, seans limiti ve gece yarısını aşan cihaz/müşteri zaman çakışmalarını kapsar. SQL şeması PGlite PostgreSQL motorunda da çalıştırılır; hesap izolasyonu, anonim erişim engeli, yabancı anahtarlar ve veritabanı doğrulamaları test edilir. Tarayıcıda müşteri oluşturma, müşteriye özel paket atama, randevu ve katılım güncelleme, ölçüm kaydı ve anatomi seçimi kontrol edilmiştir. Masaüstü ve 390 px telefon düzeni doğrulanmıştır. Gerçek Supabase bağlantısı için sizin hesabınızdaki proje ve anahtarlar gereklidir; yerel önizleme canlı veritabanı bağlantısını kanıtlamaz.
+Otomatik testler; tekli/çoklu cihaz geçişini, ikincil cihaz çakışmalarını, paket düzenleme ve cihaz silme korumasını, ilk/son ölçüm sıralaması ve eksik değerleri, katılım sayacı, paket tarih sınırları, seans limiti ve gece yarısını aşan cihaz/müşteri zaman çakışmalarını kapsar. SQL şeması PGlite PostgreSQL motorunda da çalıştırılır; hesap izolasyonu, anonim erişim engeli, yabancı anahtarlar ve veritabanı doğrulamaları test edilir. Tarayıcıda çoklu cihazlı paket oluşturma/düzenleme, müşteriye paket atama ve ikinci cihazdaki randevu çakışması kontrol edilmiştir. Gerçek Supabase bağlantısı için sizin hesabınızdaki proje ve anahtarlar gereklidir; yerel önizleme canlı veritabanı bağlantısını kanıtlamaz.
 
 ## Kapsam
 

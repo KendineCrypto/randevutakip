@@ -1,6 +1,6 @@
 export type Customer = { id: string; name: string; phone: string; email: string; created_at: string; active: boolean };
 export type Device = { id: string; name: string; description: string; active: boolean };
-export type Package = { id: string; name: string; device_id: string | null; room_name?: string; sessions: number; duration: number; price: number; active: boolean };
+export type Package = { id: string; name: string; device_id: string | null; device_ids?: string[]; room_name?: string; sessions: number; duration: number; price: number; active: boolean };
 export type Enrollment = { id: string; customer_id: string; package_id: string; total_sessions: number; start_date: string; end_date: string };
 export type Appointment = { id: string; customer_id: string; enrollment_id: string; date: string; time: string; status: 'planned' | 'attended' | 'missed' | 'cancelled' };
 export type Note = { id: string; customer_id: string; text: string; created_at: string };
@@ -16,6 +16,13 @@ export const shortDate = (date: string) => new Date(`${date.slice(0, 10)}T12:00:
 export const money = (amount: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(amount);
 export const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('');
 export function progress(data: Data, enrollment: Enrollment) { return data.appointments.filter(a => a.enrollment_id === enrollment.id && a.status === 'attended').length; }
+// Old saved demos and rows remain readable until the SQL upgrade is applied.
+export function packageDeviceIds(pkg?: Pick<Package, 'device_id' | 'device_ids'>): string[] {
+  return [...new Set(pkg?.device_ids ?? (pkg?.device_id ? [pkg.device_id] : []))];
+}
+export function packageDeviceNames(data: Data, pkg?: Package): string {
+  return packageDeviceIds(pkg).map(id => data.devices.find(d => d.id === id)?.name ?? 'Bilinmeyen cihaz').join(' + ') || 'Cihaz atanmamış';
+}
 export const SHARED_ROOM = 'Diyet / lazer odası';
 export function packageRoom(pkg?: Pick<Package, 'name' | 'room_name'>): string {
   if (!pkg) return '';
@@ -50,7 +57,7 @@ export function validateAppointment(data: Data, appointment: Appointment): strin
     const otherEnrollment = data.enrollments.find(e => e.id === a.enrollment_id);
     const otherPackage = data.packages.find(p => p.id === otherEnrollment?.package_id);
     const sameCustomer = a.customer_id === appointment.customer_id;
-    const sameDevice = !!pkg?.device_id && pkg.device_id === otherPackage?.device_id;
+    const sameDevice = packageDeviceIds(pkg).some(id => packageDeviceIds(otherPackage).includes(id));
     const room = packageRoom(pkg);
     const sameRoom = !!room && roomKey(room) === roomKey(packageRoom(otherPackage));
     const otherStart = dayMinute(a.date) + minutes(a.time);
@@ -59,6 +66,19 @@ export function validateAppointment(data: Data, appointment: Appointment): strin
     return true;
   });
   return conflict ? reason : null;
+}
+export function validatePackageSchedule(data: Data, pkg: Package, now = Date.now()): string | null {
+  const old = data.packages.find(p => p.id === pkg.id);
+  if (!old || (old.duration === pkg.duration && roomKey(packageRoom(old)) === roomKey(packageRoom(pkg)) &&
+    [...packageDeviceIds(old)].sort().join() === [...packageDeviceIds(pkg)].sort().join())) return null;
+  const updated = { ...data, packages: data.packages.map(p => p.id === pkg.id ? pkg : p) };
+  const affected = new Set(data.enrollments.filter(e => e.package_id === pkg.id).map(e => e.id));
+  for (const a of data.appointments) {
+    if (!affected.has(a.enrollment_id) || !['planned', 'attended'].includes(a.status) ||
+      new Date(`${a.date}T${a.time}`).getTime() + pkg.duration * 60000 <= now) continue;
+    if (validateAppointment(updated, a)) return 'Bu oda, cihaz veya süre değişikliği mevcut randevularla çakışıyor. Önce çakışan randevuları taşıyın.';
+  }
+  return null;
 }
 export function makeDemoData(): Data {
   const today = dateKey(); const id = () => crypto.randomUUID();
