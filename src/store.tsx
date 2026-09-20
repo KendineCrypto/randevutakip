@@ -8,13 +8,14 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = url && key && !url.includes('YOUR_PROJECT') ? createClient(url, key) : null;
 const demoKey = 'atelier-demo-v1';
-type Store = { data: Data; demo: boolean; loading: boolean; error: string; session: Session | null; busy: boolean; save: <K extends Table>(table: K, row: Data[K][number]) => Promise<boolean>; remove: (table: Table, id: string) => Promise<boolean>; reload: () => Promise<void>; toast: string; inform: (message: string) => void; };
+type Store = { data: Data; demo: boolean; loading: boolean; error: string; session: Session | null; busy: boolean; save: <K extends Table>(table: K, row: Data[K][number]) => Promise<boolean>; getSaveError: () => string; remove: (table: Table, id: string) => Promise<boolean>; reload: () => Promise<void>; toast: string; inform: (message: string) => void; };
 const Context = createContext<Store>(null!);
 export function Provider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<Data>(emptyData); const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [toast, inform] = useState('');
   const dataRef = useRef(data); dataRef.current = data; const locked = useRef(false);
   const authUser = useRef<string | null>(null); const requestVersion = useRef(0);
+  const saveError = useRef('');
   async function reload() {
     if (!supabase) return;
     const expectedUser = authUser.current; const version = ++requestVersion.current;
@@ -48,13 +49,17 @@ export function Provider({ children }: { children: ReactNode }) {
   useEffect(() => { if (!supabase && !loading) try { sessionStorage.setItem(demoKey, JSON.stringify(data)); } catch { inform('Önizleme verileri bu tarayıcıda saklanamadı.'); } }, [data, loading]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => inform(''), 4500); return () => clearTimeout(timer); }, [toast]);
   async function save<K extends Table>(table: K, row: Data[K][number]) {
-    if (locked.current) return false; locked.current = true; setBusy(true);
+    if (locked.current) return false; locked.current = true; setBusy(true); saveError.current = '';
     try {
       if (supabase) { const { error } = await supabase.from(table).upsert({ ...row, user_id: session!.user.id }); if (error) throw error; }
       const existing = dataRef.current[table] as { id: string }[];
       setData(prev => ({ ...prev, [table]: existing.some(r => r.id === row.id) ? existing.map(r => r.id === row.id ? row : r) : [...existing, row] }));
       inform('Değişiklikler kaydedildi.'); return true;
-    } catch (err) { console.error('Save failed', err); inform('Kaydedilemedi. Bağlantıyı, tarihleri ve seans çakışmalarını kontrol edin.'); return false; }
+    } catch (err) {
+      const problem = err as { code?: string; message?: string };
+      saveError.current = problem.code === 'P0001' ? problem.message ?? 'Randevu çakışması nedeniyle kaydedilemedi.' : problem.message?.includes('room_name') ? 'Oda güncellemesi henüz kurulmamış. Supabase SQL Editor’da 20260920_shared_rooms.sql dosyasını çalıştırın.' : 'Kaydedilemedi. Bağlantıyı, tarihleri ve seans çakışmalarını kontrol edin.';
+      inform(saveError.current); return false;
+    }
     finally { locked.current = false; setBusy(false); }
   }
   async function remove(table: Table, id: string) {
@@ -65,6 +70,6 @@ export function Provider({ children }: { children: ReactNode }) {
     } catch { inform('Kayıt silinemedi. Kullanılan cihazları ve paketleri arşivleyebilirsiniz.'); return false; }
     finally { locked.current = false; setBusy(false); }
   }
-  return <Context.Provider value={{ data, demo: !supabase, loading, error, session, busy, save, remove, reload, toast, inform }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ data, demo: !supabase, loading, error, session, busy, save, getSaveError: () => saveError.current, remove, reload, toast, inform }}>{children}</Context.Provider>;
 }
 export const useStore = () => useContext(Context);

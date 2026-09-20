@@ -5,7 +5,7 @@ import { compareMeasurements, regions, shortDate } from './model';
 import type { Measurement, Region } from './model';
 export function Modal({ title, subtitle, children, close }: { title: string; subtitle?: string; children: ReactNode; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal(); document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+  useEffect(() => { const previousOverflow = document.body.style.overflow; ref.current?.showModal(); document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = previousOverflow; }; }, []);
   return <dialog ref={ref} className="modal" onCancel={close} onClick={e => { if (e.target === ref.current) close(); }}><div className="modal-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-btn" onClick={close} aria-label="Kapat"><X size={20}/></button></div>{children}</dialog>;
 }
 export function Empty({ children }: { children: ReactNode }) { return <div className="empty"><span className="empty-mark">◇</span><p>{children}</p></div>; }

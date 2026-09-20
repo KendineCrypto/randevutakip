@@ -1,6 +1,6 @@
 export type Customer = { id: string; name: string; phone: string; email: string; created_at: string; active: boolean };
 export type Device = { id: string; name: string; description: string; active: boolean };
-export type Package = { id: string; name: string; device_id: string | null; sessions: number; duration: number; price: number; active: boolean };
+export type Package = { id: string; name: string; device_id: string | null; room_name?: string; sessions: number; duration: number; price: number; active: boolean };
 export type Enrollment = { id: string; customer_id: string; package_id: string; total_sessions: number; start_date: string; end_date: string };
 export type Appointment = { id: string; customer_id: string; enrollment_id: string; date: string; time: string; status: 'planned' | 'attended' | 'missed' | 'cancelled' };
 export type Note = { id: string; customer_id: string; text: string; created_at: string };
@@ -16,6 +16,19 @@ export const shortDate = (date: string) => new Date(`${date.slice(0, 10)}T12:00:
 export const money = (amount: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(amount);
 export const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('');
 export function progress(data: Data, enrollment: Enrollment) { return data.appointments.filter(a => a.enrollment_id === enrollment.id && a.status === 'attended').length; }
+export const SHARED_ROOM = 'Diyet / lazer odası';
+export function packageRoom(pkg?: Pick<Package, 'name' | 'room_name'>): string {
+  if (!pkg) return '';
+  if (pkg.room_name?.trim()) return pkg.room_name.trim().replace(/\s+/g, ' ');
+  return /diyet|lazer/.test(pkg.name.replace(/[İIı]/g, 'i').toLowerCase()) ? SHARED_ROOM : '';
+}
+export function roomKey(room: string): string { return room.trim().replace(/\s+/g, ' ').replace(/[İIı]/g, 'i').toLowerCase(); }
+export function appointmentPackageChoices(data: Data, customerId: string) {
+  return {
+    assigned: data.enrollments.filter(e => e.customer_id === customerId),
+    catalog: data.packages.filter(p => p.active),
+  };
+}
 export function compareMeasurements(measurements: Measurement[], region: Region) {
   const ordered = [...measurements].filter(m => m.values[region] != null).sort((a, b) => a.date.localeCompare(b.date));
   const first = ordered[0]?.values[region]; const last = ordered.at(-1)?.values[region];
@@ -31,15 +44,21 @@ export function validateAppointment(data: Data, appointment: Appointment): strin
   const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
   const dayMinute = (date: string) => Date.parse(`${date}T00:00:00Z`) / 60000;
   const start = dayMinute(appointment.date) + minutes(appointment.time); const end = start + (pkg?.duration ?? 60);
+  let reason = '';
   const conflict = data.appointments.some(a => {
     if (a.id === appointment.id || ['cancelled', 'missed'].includes(a.status)) return false;
     const otherEnrollment = data.enrollments.find(e => e.id === a.enrollment_id);
     const otherPackage = data.packages.find(p => p.id === otherEnrollment?.package_id);
-    const shared = a.customer_id === appointment.customer_id || (!!pkg?.device_id && pkg.device_id === otherPackage?.device_id);
+    const sameCustomer = a.customer_id === appointment.customer_id;
+    const sameDevice = !!pkg?.device_id && pkg.device_id === otherPackage?.device_id;
+    const room = packageRoom(pkg);
+    const sameRoom = !!room && roomKey(room) === roomKey(packageRoom(otherPackage));
     const otherStart = dayMinute(a.date) + minutes(a.time);
-    return shared && start < otherStart + (otherPackage?.duration ?? 60) && end > otherStart;
+    if (!(sameCustomer || sameDevice || sameRoom) || start >= otherStart + (otherPackage?.duration ?? 60) || end <= otherStart) return false;
+    reason = sameRoom ? `${room}, ${shortDate(a.date)} ${a.time.slice(0, 5)} başlangıçlı ${otherPackage?.name ?? 'başka bir'} seansı için dolu (${otherPackage?.duration ?? 60} dk). Başka bir saat seçin.` : 'Bu saatte müşteri veya cihaz için başka bir randevu var.';
+    return true;
   });
-  return conflict ? 'Bu saatte müşteri veya cihaz için başka bir randevu var.' : null;
+  return conflict ? reason : null;
 }
 export function makeDemoData(): Data {
   const today = dateKey(); const id = () => crypto.randomUUID();

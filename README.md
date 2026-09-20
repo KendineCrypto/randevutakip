@@ -33,6 +33,16 @@ Tüm yedi tabloda RLS açıktır. Her hesap yalnızca kendi `user_id` kayıtlar�
 
 ## Kullanım akışı
 
+### Mevcut kurulum için 20 Eylül güncellemesi
+
+**Önce Supabase SQL Editor'da `supabase/migrations/20260920_shared_rooms.sql` dosyasının tamamını çalıştırın.** Mevcut projede `schema.sql` dosyasını tekrar çalıştırmayın. Güncelleme kayıtları silmez ve tekrar çalıştırılabilir. Ardından güncel uygulamayı yayınlayın / sayfayı yenileyin. Yeni projeler için `schema.sql` bu güncellemeyi zaten içerir.
+
+- Randevu formundaki **Bakım paketi** listesinde müşterinin mevcut paketleri ve salonun tüm aktif bakım paketleri ayrı gruplarda görünür. Bir bakım paketi seçince müşteriye özel seans sayısı ve tarihleri onaylanır; paket atandıktan sonra aynı randevu formunda otomatik seçilir. Kaydet, randevuyu ayrıca oluşturur. Randevu formu iptal edilse bile açıkça kaydettiğiniz paket ataması müşteri kartında kalır.
+- Adında **diyet** veya **lazer** geçen ve özel oda tanımlanmamış paketler, eski kayıtlar dahil **Diyet / lazer odası** kullanır. Paket düzenleme formundaki **Oda / ortak kullanım alanı** ile başka bir oda belirleyebilirsiniz. Başka paketlerin de aynı odayı paylaşması için aynı oda adını yazın. Cihaz seçimi bundan bağımsızdır.
+- 14.00–15.00 lazer varken ortak odada 14.30 diyet engellenir; 15.00 başlangıcı kabul edilir. Kontrol kısmi örtüşme, farklı gün/gece yarısı, tarih veya saat düzenlemesi ve iptal edilen randevunun yeniden açılması için de geçerlidir. İptal/Gelmedi kayıtları odayı meşgul etmez.
+- Oda/cihaz değişikliği veya seans süresi uzatılması gelecekteki mevcut randevuları çakıştıracaksa veritabanı kaydı reddeder. Migration, önceden oluşturulmuş çakışan randevuları otomatik taşımaz; mevcut diyet/lazer randevularını takvimden gözden geçirin.
+- Bu sürümün oda koruması için SQL güncellemesi gereklidir; yalnızca uygulamayı GitHub'a göndermek veritabanını güncellemez.
+
 1. **Paketler & cihazlar:** cihazlarınızı ekleyin, cihazlara bağlı paketleri ve istediğiniz seans sayısını belirleyin.
 2. **Müşteriler:** müşteri oluşturun. Kartını açıp Paketler & seanslar → Paket ata seçin. Müşteriye özel seans sayısı, başlangıç ve bitiş tarihi girin.
 3. **Randevu takvimi:** müşteriyi ve atanmış paketi seçerek tarih/saat belirleyin. Aynı müşteri/cihazın çakışan saatleri kontrol edilir.
